@@ -1,0 +1,12 @@
+name: rf_ga_model
+title: rf_ga_model
+username:
+account: stylianos-kampakis
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 380310
+bundleId: 1478922
+url: https://stylianos-kampakis.shinyapps.io/rf_ga_model/
+when: 1531483214.62823
+asMultiple: FALSE
+asStatic: FALSE

@@ -1,0 +1,12 @@
+name: random_forest_with_genetic_algorithm_sim
+title: Random forest with genetic algorithm sim
+username:
+account: qredo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 387906
+bundleId: 1499738
+url: https://qredo.shinyapps.io/random_forest_with_genetic_algorithm_sim/
+when: 1532532502.19597
+asMultiple: FALSE
+asStatic: FALSE

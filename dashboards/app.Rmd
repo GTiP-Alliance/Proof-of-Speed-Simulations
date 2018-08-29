@@ -1,0 +1,125 @@
+---
+title: "Random Forest interactive: Simulation fails, double spending and num orphans"
+author: "Stylianos Kampakis"
+date: "08/07/2018"
+output: html_document
+runtime: shiny
+---
+
+<style>
+  .col2 {
+    columns: 2 200px;         /* number of columns and width in pixels*/
+    -webkit-columns: 2 200px; /* chrome, safari */
+    -moz-columns: 2 200px;    /* firefox */
+  }
+  .col3 {
+    columns: 3 100px;
+    -webkit-columns: 3 100px;
+    -moz-columns: 3 100px;
+  }
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(randomForest)
+```
+
+
+
+### Model results
+<div class="col2">
+```{r echo = FALSE}
+
+
+fileInput("file1", "Choose CSV File",accept = c("text/csv","text/comma-separated-values,text/plain",".csv"))
+
+selectInput("response_variable","Choose response:",  c("Double spending detected" = "dspend",
+                  "Num orphans" = "orphans",
+                  "Failures in the sim" = "failure"))
+
+sliderInput("minters_to_users", label = "minters to users ratio",
+              min = 0.01, max = 1, value = 0.1, step = 0.01)
+
+sliderInput("perc_evil_minters", label = "percentage of evil minters",
+              min = 0, max = 0.9, value = 0.1, step = 0.01)
+
+sliderInput("perc_evil_users", label = "percentage of evil users",
+              min = 0, max = 0.9, value = 0.1, step = 0.01)
+
+sliderInput("num_trans_to_beacon", label = "average number of transactions to beacon threshold",
+              min = 0.01, max = 100, value = 1.0, step = 0.5)
+
+sliderInput("transaction_volume", label = "transaction volume",
+              min = 0.01, max = 0.5, value = 0.1, step = 0.01)
+
+sliderInput("decision_thres", label = "decision threshold",
+              min = 0.50001, max = 0.99, value = 0.50001, step = 0.05)
+
+sliderInput("average_minter_speed", label = "average minter speed",
+              min = 500, max = 6000, value = 2000, step = 100)
+
+sliderInput("broadcast_percentage_selection", label = "% minters selected for next checkpoint",
+            min = 0.01, max = 0.9, value = 0.1, step = 0.05)
+
+actionButton("do", "Run")
+```
+</div>
+
+```{r echo = FALSE}
+observeEvent(input$file1,{
+  print(input$file1)
+
+})
+
+
+
+reactive({
+  req(input$do)
+  df=read.csv(input$file1$datapath)
+  
+  choice = input$response_variable
+  
+
+  
+  df$transactions_threshold_to_beacon = df$beacon_num_trans_threshold/df$mean_num_transactions
+  df$dspend_to_users = df$dspend_all/df$num_users
+  df$minters_to_users = df$num_minters/df$num_users
+  df$losers_to_minters = df$loser_nodes/df$num_minters
+  df$detected_dspend = as.factor(df$dspend_main>0 & df$failed=='False')
+  df$beacon_percentage_selection=df$broadcast_percentage_selection
+  #print(head(df))
+  
+  if (choice=='dspend'){
+    response=df$detected_dspend
+  }
+  if (choice=='failure'){
+    response=df$failed
+  }
+  if (choice=='orphans'){
+    response=df$orphans_to_total
+  }
+  
+  m_rf = randomForest(response~transactions_threshold_to_beacon+minters_to_users
+                 +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df)
+  
+  artificial_df = df[1,]
+  #print(artificial_df)
+  #renderTable(artificial_df)
+
+  artificial_df$minters_to_users = input$minters_to_users
+  artificial_df$transactions_threshold_to_beacon = input$num_trans_to_beacon
+  artificial_df$transaction_volume = input$transaction_volume
+  artificial_df$average_minter_speed = input$average_minter_speed
+  artificial_df$decision_thres = input$decision_thres
+  artificial_df$perc_evil_users = input$perc_evil_users
+  artificial_df$perc_evil_minters = input$perc_evil_minters
+  artificial_df$broadcast_percentage_selection = input$broadcast_percentage_selection
+  head(artificial_df)
+
+  prediction = predict(m_rf,artificial_df,type='prob')
+  print(paste('Probability of failure :',prediction[2]))
+  })
+
+
+```

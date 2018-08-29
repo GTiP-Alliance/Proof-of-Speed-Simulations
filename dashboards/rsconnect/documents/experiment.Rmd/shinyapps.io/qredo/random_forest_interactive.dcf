@@ -1,0 +1,12 @@
+name: random_forest_interactive
+title: Random forest interactive
+username:
+account: qredo
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 387903
+bundleId: 1499727
+url: https://qredo.shinyapps.io/random_forest_interactive/
+when: 1532532353.10926
+asMultiple: FALSE
+asStatic: FALSE

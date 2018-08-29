@@ -1,0 +1,223 @@
+---
+title: "Qredo simulation analysis"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+#Read the file
+```{r}
+path_to_file='/Users/stelios/Dropbox/Freelance/Qredo/simulation/use_case4_all.csv'
+df = read.csv(path_to_file)
+
+show_imps<-function(model){
+  imps=importance(model)
+  imps=data.frame(imps)
+  imps$names=row.names(imps)
+  imps=imps[order(imps$MeanDecreaseGini,decreasing=TRUE),]
+  imps$names=NULL
+  return(imps)
+}
+
+show_imps_regression<-function(model){
+  imps=importance(model)
+  imps=data.frame(imps)
+  imps$names=row.names(imps)
+  imps=imps[order(imps$IncNodePurity,decreasing=TRUE),]
+  imps$names=NULL
+  return(imps)
+}
+```
+
+Create new variables
+```{r}
+df$X=NULL
+
+#create new variables
+df$transactions_threshold_to_beacon = df$beacon_num_trans_threshold/df$mean_num_transactions
+df$dspend_to_trans = df$dspend_all/(df$mean_num_transactions*100)
+df$dspend_main_to_trans = df$dspend_main/(df$mean_num_transactions*100)
+df$minters_to_users = df$num_minters/df$num_users
+df$losers_to_minters = df$loser_nodes/df$num_minters
+df$orphans_to_total = df$num_orphan_transactions/(df$mean_num_transactions*100)
+df$beacon_percentage_selection=df$broadcast_percentage_selection
+df=df[complete.cases(df),]
+```
+
+#Double spending
+Detect if there were any double spending incidents in the main checkpoint (double spending incidents that were confirmed as double spending)
+```{r}
+#detect if double spending exists in any main checkpoint in the simulation, NOT the main checkpoint
+df$expected_transactions = df$transaction_volume*df$num_users*100
+df$dspend_to_expected_transaction = df$dspend_main/df$expected_transactions
+print(paste('Num of double spending incidents detected (even failures):',sum(df$dspend_main>0)/nrow(df),"%"))
+print(paste('Num of double spending incidents detected (excluding failures):',sum(df$dspend_main>0 & df$failed=='False')/nrow(df),"%"))
+print(paste('Double spending to transactions ratio:',mean(df$dspend_to_expected_transaction)))
+df$detected_dspend = as.factor(df$dspend_main>0 & df$failed=='False')
+print(paste('Median % of orphan transactions to total transactions:',median(df$orphans_to_total)*100,"%"))
+print(paste('Mean gini coefficient (0 means totally equal):',mean(df$gini)))
+print(paste('% of system failures in the simulation:',100*dim(df[df$failed=='True',])[1]/dim(df)[1]))
+
+```
+
+```{r}
+#understand double spend attempts (includes all dspend, not only those that went in the main checkpoint)
+m_dspend = lm(df$dspend_to_trans~df$transactions_threshold_to_beacon+df$minters_to_users
+       +df$transaction_volume+df$decision_thres+df$perc_evil_minters+df$perc_evil_users+df$average_minter_speed+
+         df$beacon_percentage_selection)
+summary(m_dspend)
+
+```
+
+```{r}
+#understand double spend attempts in the main checkpoint
+m_dspend = lm(df$dspend_main_to_trans~df$transactions_threshold_to_beacon+df$minters_to_users
+       +df$transaction_volume+df$decision_thres+df$perc_evil_minters+df$perc_evil_users+df$average_minter_speed+
+         df$beacon_percentage_selection)
+summary(m_dspend)
+
+```
+```{r}
+#Analyse double spend incidents in the main checkpoint
+ m_dspend_detect_glm = glm(detected_dspend~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df,family=binomial)
+  
+summary(m_dspend_detect_glm)
+```
+
+```{r}
+#Predict double spend incidents in the main checkpoint
+ m_dspend_detect_rf = randomForest(detected_dspend~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df)
+  
+plot(m_dspend_detect_rf)
+print(m_dspend_detect_rf)
+```
+```{r}
+print(show_imps(m_dspend_detect_rf))
+varImpPlot(m_dspend_detect_rf)
+```
+
+
+#When the system fails
+
+Understand what makes a simulation fail through the use of a logistic regression and a random forest model
+
+
+```{r}
+
+m_logistic = glm(df$failed~transactions_threshold_to_beacon+minters_to_users
+                 +transaction_volume+df$decision_thres+perc_evil_minters+perc_evil_users
+                 +average_minter_speed+
+         beacon_percentage_selection,family=binomial(link='logit'),data=df)
+summary(m_logistic)
+```
+Now try to understand when simulations fail based on a random forest. First plot is the performance of the model. Error rate with upper and lower confidence intervals
+```{r}
+library(randomForest)
+m_rf = randomForest(failed~transactions_threshold_to_beacon+minters_to_users
+                 +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+
+                   average_minter_speed+
+         beacon_percentage_selection,data=df)
+plot(m_rf)
+print(m_rf)
+```
+These plots show the importance of different variables for which simulations fail, based on the random forest model.
+```{r}
+print(show_imps(m_rf))
+varImpPlot(m_rf)
+```
+
+
+#Loser nodes and inequality
+```{r}
+cor_losers=cor(df$loser_nodes,df$num_minters)
+print(paste('correlation between num of losers and num of minters:',cor_losers))
+
+hist(df$loser_nodes)
+hist(df$losers_to_minters)
+plot(df$loser_nodes,df$num_minters)
+abline(0,1)
+```
+Model the relationship between loser nodes and the input
+```{r}
+#understand loser nodes (nodes with no reward)
+m_losers = lm(df$losers_to_minters~df$transactions_threshold_to_beacon+df$minters_to_users
+       +df$transaction_volume+df$decision_thres+df$perc_evil_minters+df$perc_evil_users+df$average_minter_speed+
+         df$beacon_percentage_selection)
+
+summary(m_losers)
+print(qplot(df$losers,xlab='loser nodes as % of total minters'))
+```
+
+```{r}
+#understand loser nodes (nodes with no reward) using a random forest model
+m_losers_rf = randomForest(losers_to_minters~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+df$perc_evil_minters+df$perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df)
+
+plot(m_losers_rf)
+print(m_losers_rf)
+```
+```{r}
+print(show_imps_regression(m_losers_rf))
+varImpPlot(m_losers_rf)
+```
+
+#Gini coefficient
+```{r}
+#understand loser nodes (nodes with no reward)
+m_gini = lm(df$gini~df$transactions_threshold_to_beacon+df$minters_to_users
+       +df$transaction_volume+df$decision_thres+df$perc_evil_minters+df$perc_evil_users+df$average_minter_speed+
+         df$beacon_percentage_selection)
+
+summary(m_gini)
+```
+
+```{r}
+#understand loser nodes (nodes with no reward) using a random forest model
+m_gini_rf = randomForest(gini~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df)
+
+plot(m_gini_rf)
+print(m_gini_rf)
+```
+
+
+```{r}
+print(show_imps_regression(m_gini_rf))
+varImpPlot(m_gini_rf)
+```
+
+
+```{r}
+#understand orphaned transactions
+df2=df[df$failed=='False',]
+m_orphans = lm(orphans_to_total ~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df2)
+
+summary(m_orphans)
+library(ggplot2)
+print(qplot(df$orphans_to_total,xlab='orphan transactions',bins=20))
+```
+```{r}
+#understand loser nodes (nodes with no reward) using a random forest model
+m_orphans_rf = randomForest(orphans_to_total~transactions_threshold_to_beacon+minters_to_users
+       +transaction_volume+decision_thres+perc_evil_minters+perc_evil_users+average_minter_speed+
+         beacon_percentage_selection,data=df2)
+
+plot(m_orphans_rf)
+print(m_orphans_rf)
+```
+```{r}
+print(show_imps_regression(m_orphans_rf))
+varImpPlot(m_orphans_rf)
+```

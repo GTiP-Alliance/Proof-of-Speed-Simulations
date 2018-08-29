@@ -1,0 +1,12 @@
+name: random-forest-interactive
+title: random-forest-interactive
+username:
+account: stylianos-kampakis
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 379230
+bundleId: 1478882
+url: https://stylianos-kampakis.shinyapps.io/random-forest-interactive/
+when: 1531481310.2845
+asMultiple: FALSE
+asStatic: FALSE
